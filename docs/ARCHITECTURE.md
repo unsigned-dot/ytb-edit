@@ -32,7 +32,7 @@ des segments **sans réencodage**, via une file de tâches dans une interface gr
 | GUI | **PySide6** (Qt 6, paquet `PySide6-Essentials`) | Rendu Windows natif, signaux thread-safe, widgets riches, licence LGPL (≠ PyQt en GPL), binding officiel Qt, bon support PyInstaller/Nuitka. Tkinter : trop limité (pas de range slider, rendu daté). Solutions web (Flet, pywebview…) : une couche de plus sans bénéfice ici. |
 | Slider début/fin | **`superqt.QRangeSlider`** | Qt n'a pas de slider à deux poignées ; `superqt` est petit, maintenu, compatible PySide6. Évite ~150 lignes de widget custom. |
 | YouTube | **yt-dlp** (API Python, extra `[default]`) | Standard de fait, maintenu très activement, métadonnées structurées, hooks de progression, exceptions typées. |
-| Runtime JS | **Deno** (installé à part) | Depuis fin 2025, yt-dlp a besoin d'un runtime JavaScript externe pour le support complet de YouTube. C'est la configuration officielle de yt-dlp, pas un contournement. *À revérifier à l'étape 4.* |
+| Runtime JS | **Deno** recommandé (Node ou Bun acceptés) | yt-dlp a besoin d'un moteur JavaScript externe pour le support complet de YouTube (configuration officielle de yt-dlp, pas un contournement). Vérifié à l'étape 4 : l'application utilise le premier trouvé dans le `PATH` (deno → node → bun). |
 | FFmpeg | **FFmpeg système** (+ chemin optionnel dans les paramètres, + dossier `bin/` réservé au futur packaging) | Le plus simple à maintenir : `winget install Gyan.FFmpeg`, mises à jour indépendantes de l'app. |
 | Paramètres | Fichier **JSON** dans `%APPDATA%\ytb-edit\` | Lisible, testable, indépendant de Qt (QSettings écrirait dans le registre et couplerait le cœur à Qt). |
 | Chemins système | **platformdirs** | Chemins Windows corrects, tests possibles sous Linux/CI. |
@@ -159,7 +159,7 @@ Classes **non retenues** et pourquoi :
 
 Erreurs (`core/errors.py`) : une base `AppError(user_message, details)` et des
 sous-classes ciblées : `InvalidUrlError`, `VideoUnavailableError`, `UnsupportedVideoError`
-(live, restriction d'âge, DRM, membres…), `NetworkError`, `DownloadError`,
+(live, restriction d'âge, DRM, membres…), `NetworkError`, `YouTubeError` (autre échec yt-dlp),
 `MissingStreamError`, `SourceCorruptedError`, `FFmpegError`, `ToolMissingError`,
 `InvalidSegmentError`, `DiskSpaceError`, `OperationCancelled`.
 

@@ -17,6 +17,7 @@ def main() -> int:
     log_file = setup_logging(paths.log_dir(), console="--debug" in sys.argv)
     log.info("Démarrage de %s %s (Python %s)", APP_NAME, __version__, sys.version.split()[0])
     log.info("Fichier de log : %s", log_file)
+    _log_environment()
 
     # Import local : les modules non graphiques restent importables sans Qt.
     from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
@@ -33,3 +34,16 @@ def main() -> int:
     exit_code = app.exec()
     log.info("Arrêt (code %s)", exit_code)
     return exit_code
+
+
+def _log_environment() -> None:
+    from ytb_edit.services.youtube import find_js_runtime, ytdlp_version
+
+    log.info("yt-dlp %s", ytdlp_version())
+    runtime = find_js_runtime()
+    if runtime:
+        log.info("Moteur JavaScript : %s (%s)", *runtime)
+    else:
+        log.warning(
+            "Aucun moteur JavaScript trouvé : installer Deno (winget install DenoLand.Deno)"
+        )

@@ -28,3 +28,24 @@ class InvalidSegmentError(AppError):
 
 class InvalidStateTransitionError(AppError):
     """Changement d'état interdit : révèle un bug dans le moteur."""
+
+
+class InvalidUrlError(AppError):
+    """Texte qui n'est pas une URL de vidéo YouTube reconnue."""
+
+
+class VideoUnavailableError(AppError):
+    """Vidéo privée, supprimée ou inexistante."""
+
+
+class UnsupportedVideoError(AppError):
+    """Vidéo existante mais volontairement non prise en charge (live, restriction d'âge,
+    contenu réservé aux membres, DRM…). Aucun contournement n'est tenté."""
+
+
+class NetworkError(AppError):
+    """Problème de connexion : réessayer plus tard peut suffire."""
+
+
+class YouTubeError(AppError):
+    """Autre échec côté YouTube / yt-dlp."""
