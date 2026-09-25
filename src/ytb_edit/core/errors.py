@@ -49,3 +49,30 @@ class NetworkError(AppError):
 
 class YouTubeError(AppError):
     """Autre échec côté YouTube / yt-dlp."""
+
+
+class MissingStreamError(AppError):
+    """La vidéo ne possède pas la piste nécessaire au mode demandé (ex. pas d'audio)."""
+
+
+class SourceCorruptedError(AppError):
+    """Fichier source téléchargé absent, incomplet ou illisible."""
+
+
+class FFmpegError(AppError):
+    """Échec d'une commande FFmpeg / ffprobe."""
+
+
+class ToolMissingError(AppError):
+    """Outil externe introuvable (FFmpeg, ffprobe)."""
+
+
+class DiskSpaceError(AppError):
+    """Espace disque insuffisant."""
+
+
+class OperationCancelled(AppError):
+    """Opération annulée par l'utilisateur ou par l'arrêt de l'application."""
+
+    def __init__(self, details: str | None = None) -> None:
+        super().__init__("Annulé.", details)

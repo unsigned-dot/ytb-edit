@@ -32,6 +32,13 @@ class OutputMode(StrEnum):
         return self is not OutputMode.VIDEO_ONLY
 
 
+class AudioFormat(StrEnum):
+    """Format de sortie du mode « audio seul »."""
+
+    M4A = "m4a"  # piste AAC d'origine, sans réencodage
+    MP3 = "mp3"  # réencodage de l'audio (compatibilité maximale)
+
+
 class TaskStatus(StrEnum):
     FETCHING_INFO = "fetching_info"  # récupération des métadonnées
     READY = "ready"  # métadonnées OK, pas de source local

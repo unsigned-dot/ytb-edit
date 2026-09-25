@@ -224,7 +224,7 @@ def test_fetch_video_info_translates_errors():
 
 def test_find_js_runtime_prefers_deno(monkeypatch):
     available = {"node": "/usr/bin/node", "deno": "/usr/bin/deno"}
-    monkeypatch.setattr(youtube.shutil, "which", available.get)
+    monkeypatch.setattr(youtube.shutil, "which", lambda name, path=None: available.get(name))
     assert youtube.find_js_runtime() == ("deno", "/usr/bin/deno")
     del available["deno"]
     assert youtube.find_js_runtime() == ("node", "/usr/bin/node")

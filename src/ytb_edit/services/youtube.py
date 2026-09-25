@@ -10,21 +10,29 @@ import logging
 import math
 import re
 import shutil
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import yt_dlp
+from yt_dlp.utils import DownloadCancelled
 from yt_dlp.utils import DownloadError as YtDlpDownloadError
 
+from ytb_edit import paths
 from ytb_edit.core.errors import (
     AppError,
+    DiskSpaceError,
     InvalidUrlError,
+    MissingStreamError,
     NetworkError,
+    OperationCancelled,
+    SourceCorruptedError,
     UnsupportedVideoError,
     VideoUnavailableError,
     YouTubeError,
 )
-from ytb_edit.core.models import VideoInfo
+from ytb_edit.core.models import SourceFiles, VideoInfo
 
 log = logging.getLogger(__name__)
 
@@ -98,8 +106,9 @@ JS_RUNTIMES = ("deno", "node", "bun")
 
 def find_js_runtime() -> tuple[str, str] | None:
     """Renvoie ``(nom, chemin)`` du premier moteur JavaScript trouvé dans le PATH."""
+    search = paths.tool_search_path()
     for name in JS_RUNTIMES:
-        if path := shutil.which(name):
+        if path := shutil.which(name, path=search):
             return name, path
     return None
 
@@ -248,6 +257,11 @@ _NETWORK_MESSAGE = "Problème de connexion réseau. Vérifiez votre connexion pu
 
 # Ordre important : du plus spécifique au plus général.
 _ERROR_RULES: list[tuple[re.Pattern[str], type[AppError], str]] = [
+    (
+        re.compile(r"no space left|not enough space|errno 28"),
+        DiskSpaceError,
+        "Espace disque insuffisant pour le téléchargement.",
+    ),
     (re.compile(r"private video"), VideoUnavailableError, "Vidéo privée."),
     (
         re.compile(r"confirm your age|age[- ]restricted|inappropriate for some users"),
@@ -320,3 +334,132 @@ def translate_ytdlp_error(exc: Exception) -> AppError:
         "Impossible de récupérer la vidéo (voir les logs). Mettre à jour yt-dlp peut aider.",
         details=message,
     )
+
+
+# ---------------------------------------------------------------------------
+# Téléchargement
+# ---------------------------------------------------------------------------
+
+VIDEO_SELECTOR = "bv/b"  # meilleure piste vidéo seule, sinon meilleur format combiné
+AUDIO_SELECTOR = "ba/b"
+AAC_AUDIO_SELECTOR = "ba[acodec^=mp4a]/ba/b"  # pour un .m4a sans réencodage
+
+ProgressCallback = Callable[[float, str], None]
+
+
+def download_streams(
+    info: VideoInfo,
+    dest_dir: Path,
+    *,
+    want_video: bool,
+    want_audio: bool,
+    prefer_aac: bool = False,
+    is_cancelled: Callable[[], bool] = lambda: False,
+    on_progress: ProgressCallback | None = None,
+    ydl_class: type = yt_dlp.YoutubeDL,
+) -> SourceFiles:
+    """Télécharge les pistes demandées, séparément et sans fusion, dans ``dest_dir``.
+
+    L'audio est téléchargé en premier (rapide). ``on_progress(fraction, texte)``
+    est appelé à chaque avancée ; l'appelant se charge de limiter la fréquence.
+    """
+    if not (want_video or want_audio):
+        raise ValueError("Aucune piste demandée")
+    selectors = []
+    if want_audio:
+        selectors.append(AAC_AUDIO_SELECTOR if prefer_aac else AUDIO_SELECTOR)
+    if want_video:
+        selectors.append(VIDEO_SELECTOR)
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    progress = _DownloadProgress(
+        estimate=(info.estimated_size or 0) if want_video and want_audio else 0,
+        on_progress=on_progress,
+    )
+
+    def hook(status: dict[str, Any]) -> None:
+        if is_cancelled():
+            raise DownloadCancelled("Téléchargement annulé")
+        progress.update(status)
+
+    options = base_options() | {
+        "format": ",".join(selectors),
+        "outtmpl": {"default": str(dest_dir / "%(format_id)s.%(ext)s")},
+        "continuedl": True,
+        "fixup": "never",  # pas de remux complet : FFmpeg lit les fichiers DASH tels quels
+        "progress_hooks": [hook],
+    }
+    log.info("Téléchargement %s (%s) → %s", info.url, options["format"], dest_dir)
+    try:
+        with ydl_class(options) as ydl:
+            raw = ydl.extract_info(info.url, download=True)
+    except DownloadCancelled as exc:
+        raise OperationCancelled(str(exc)) from exc
+    except YtDlpDownloadError as exc:
+        if is_cancelled():
+            raise OperationCancelled(str(exc)) from exc
+        raise translate_ytdlp_error(exc) from exc
+
+    return _source_from_result(raw, want_video=want_video, want_audio=want_audio)
+
+
+def _source_from_result(raw: dict[str, Any], *, want_video: bool, want_audio: bool) -> SourceFiles:
+    downloads = raw.get("requested_downloads") or [raw]
+    files: list[tuple[Path, bool, bool]] = []
+    for item in downloads:
+        name = item.get("filepath") or item.get("_filename")
+        if not name:
+            continue
+        path = Path(name)
+        if not path.is_file() or path.stat().st_size == 0:
+            raise SourceCorruptedError("Fichier téléchargé introuvable ou vide.", details=str(path))
+        files.append((path, _has_codec(item, "vcodec"), _has_codec(item, "acodec")))
+
+    video = next((p for p, v, _ in files if v), None) if want_video else None
+    audio = None
+    if want_audio:
+        audio = next((p for p, v, a in files if a and not v), None) or next(
+            (p for p, _, a in files if a), None
+        )
+    if want_video and video is None:
+        raise MissingStreamError("Cette vidéo ne propose pas de piste vidéo.")
+    if want_audio and audio is None:
+        raise MissingStreamError("Cette vidéo n'a pas de piste audio.")
+    return SourceFiles(video_path=video, audio_path=audio)
+
+
+class _DownloadProgress:
+    """Agrège la progression de plusieurs pistes en une seule fraction."""
+
+    def __init__(self, estimate: int, on_progress: ProgressCallback | None) -> None:
+        self.estimate = estimate
+        self.on_progress = on_progress
+        self.files: dict[str, tuple[int, int]] = {}
+
+    def update(self, status: dict[str, Any]) -> None:
+        if self.on_progress is None:
+            return
+        key = status.get("filename") or "?"
+        state = status.get("status")
+        total = status.get("total_bytes") or status.get("total_bytes_estimate") or 0
+        if state == "downloading":
+            self.files[key] = (status.get("downloaded_bytes") or 0, int(total))
+        elif state == "finished":
+            size = status.get("downloaded_bytes") or total
+            self.files[key] = (int(size), int(size))
+        else:
+            return
+        done = sum(d for d, _ in self.files.values())
+        known = sum(t for _, t in self.files.values())
+        grand_total = max(known, self.estimate)
+        fraction = min(done / grand_total, 0.999) if grand_total else 0.0
+
+        info = status.get("info_dict") or {}
+        kind = "vidéo" if _has_codec(info, "vcodec") else "audio"
+        text = f"Téléchargement ({kind})"
+        if state == "downloading":
+            if speed := status.get("speed"):
+                text += f" — {speed / 1_048_576:.1f} Mo/s"
+            if (eta := status.get("eta")) is not None:
+                text += f" — reste {int(eta) // 60}:{int(eta) % 60:02d}"
+        self.on_progress(fraction, text)

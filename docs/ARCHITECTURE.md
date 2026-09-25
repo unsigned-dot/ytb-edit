@@ -1,7 +1,6 @@
 # ytb-edit — Architecture (Étape 1, proposition à valider)
 
-> Statut : **validée** (voir §20). Ce document sert de référence pour les étapes
-> suivantes et est mis à jour au fil des décisions.
+> Statut : **V1 implémentée** (voir §21). Décisions validées : §20.
 
 Outil personnel Windows : télécharger des vidéos YouTube publiques puis en extraire
 des segments **sans réencodage**, via une file de tâches dans une interface graphique.
@@ -310,28 +309,30 @@ cookie, aucune authentification.
 fenêtre avec la commande d'installation (`winget install Gyan.FFmpeg`), traitement
 désactivé, reste de l'UI utilisable. Même principe pour Deno.
 
-**Découpe sans réencodage — alignement explicite sur l'image clé :**
+**Découpe sans réencodage — image clé + recherche combinée** (validée par des tests réels
+sur VP9/webm et H.264/mp4 avec images B, audio Opus et AAC) :
 1. `ffprobe` lit les paquets vidéo autour du début (`-read_intervals`, sans décodage) et
    trouve `K` = dernière image clé ≤ début demandé.
-2. Découpe avec recherche en entrée (`-ss` avant `-i`) à `K` pour **chaque** entrée :
+2. Recherche combinée, identique pour chaque entrée :
+   - en entrée `-ss (K − 10 s)` : saut rapide dans le fichier ;
+   - en sortie `-ss` jusqu'à `K − 0,1 s` : coupe au paquet près ; FFmpeg ignore les
+     paquets vidéo avant l'image clé `K`.
 
 ```
 Vidéo + audio :
-ffmpeg -hide_banner -nostdin -n
-       -ss K -i video.webm  -ss K -i audio.webm  -t (fin − K)
-       -map 0:v:0 -map 1:a:0 -c copy
-       -avoid_negative_ts make_zero -movflags +faststart  clip.part.mp4
-Vidéo seule : idem avec une seule entrée, -map 0:v:0 -an
-Audio seul  : -ss début -i audio.* -t (fin − début) -map 0:a:0 -c copy  → .opus / .m4a
+ffmpeg -ss (K−10) -i video.webm -ss (K−10) -i audio.m4a -ss 9.9 -t (fin − K + 0.1)
+       -map 0:v:0 -map 1:a:0 -c copy -avoid_negative_ts make_zero
+       -f mp4 -movflags +faststart  clip.part.mp4
+Vidéo seule : une seule entrée, -an
+Audio seul  : pas de marge (coupe exacte) ; -f ipod (.m4a), -f opus, ou libmp3lame (.mp3)
 ```
 
-Pourquoi chercher `K` soi-même plutôt que laisser FFmpeg arrondir : en copie, FFmpeg
-conserve la portion avant le point demandé avec des horodatages négatifs/listes
-d'édition, ce qui donne selon les lecteurs une image figée au début ou une
-désynchronisation. En démarrant exactement sur `K`, vidéo et audio démarrent au même
-instant, le clip est « propre » partout, et l'UI peut afficher le début réel.
+Pourquoi pas une simple recherche en entrée à `K` (première idée) : les tests ont montré
+que selon le conteneur, FFmpeg recule jusqu'à l'image clé *précédente* (webm) ou saute
+l'image clé visée (H.264 : son temps de décodage précède son temps d'affichage), d'où
+jusqu'à 2,5 s de décalage entre le début de l'audio et celui de la vidéo. La recherche
+combinée donne au plus 0,1 s d'audio en tête, synchro conservée, dans tous les cas testés.
 
-- `-n` : FFmpeg ne peut jamais écraser un fichier.
 - Écriture dans `*.part.*` puis renommage → jamais de clip à moitié écrit sous un nom final.
 - Progression par `-progress pipe:1` (utile pour les longs segments).
 - Commande complète journalisée ; en cas d'échec, les 30 dernières lignes de stderr sont
@@ -533,3 +534,23 @@ d'auteur, les licences applicables et les conditions d'utilisation de YouTube.
 7. ✅ **Persistance de la file** entre deux lancements : hors V1.
 8. ✅ **Boutons d'incrément** : −10 / −1 / +1 / +10 s + clavier + saisie rapide.
 9. ✅ **Dépendance Deno** : acceptée.
+
+---
+
+## 21. État d'avancement
+
+V1 utilisable (étapes 5 à 11 réalisées d'un bloc à la demande de l'utilisateur) :
+téléchargement, découpe FFmpeg, fichiers, cache, file, interface, progression, erreurs,
+annulation, ajout dynamique. Scripts Windows : `installer.bat`, `Lancer ytb-edit.bat`,
+`Mettre a jour yt-dlp.bat`.
+
+Modules ajoutés par rapport au §4 : `services/media.py` (implémentation réelle de
+l'interface `Media` du moteur), `ui/labels.py` (textes des états).
+
+Vérifié automatiquement : 263 tests (moteur avec faux services, vraie découpe FFmpeg,
+pipeline complet moteur + FFmpeg, interface via pytest-qt). **Non vérifié** dans
+l'environnement de développement : accès réel à YouTube (réseau bloqué) et exécution
+sous Windows (Job Object, scripts `.bat`).
+
+Restent : étapes 12 à 15 (robustesse issue des retours d'usage, optimisation, packaging
+`.exe`).
