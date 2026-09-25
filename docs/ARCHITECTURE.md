@@ -14,7 +14,7 @@ des segments **sans réencodage**, via une file de tâches dans une interface gr
 |---|---------|-------------------|
 | C1 | **« ±1 s » vs « pas de réencodage »**. En copie de flux, une vidéo ne peut commencer que sur une *image clé*. Sur YouTube, l'écart entre images clés est typiquement de 2 à 5 s (parfois plus). La précision ±1 s n'est donc **pas garantissable** sans réencodage. | Le début est **aligné sur l'image clé précédente** : le clip peut commencer jusqu'à ~2-5 s *plus tôt* que demandé, mais ne coupe **jamais** le contenu voulu. La fin est précise (±1 image/paquet). L'UI affiche le début réel. Le « smart cut » (réencoder uniquement les premières secondes) est reporté en V2. |
 | C2 | **« Meilleure qualité » vs « MP4 »**. La meilleure piste YouTube est souvent en **AV1 ou VP9** (+ audio **Opus**). Ces codecs se placent très bien dans un MP4, mais certains logiciels (anciens lecteurs Windows, Premiere Pro…) les lisent mal. Le « tout compatible » (H.264/AAC) est souvent limité à 1080p. | **Meilleure qualité absolue**, conteneur MP4. Réglage « préférer la compatibilité (H.264/AAC) » envisageable plus tard. *À valider selon l'usage des clips.* |
-| C3 | **« Audio seul en M4A » vs « meilleure piste audio »**. La meilleure piste audio est généralement Opus (~130-160 kb/s), pas AAC (128 kb/s). | Extension adaptée au codec : **`.opus`** si Opus, **`.m4a`** si AAC. Pas de réencodage. |
+| C3 | **« Audio seul en M4A » vs « meilleure piste audio »**. La meilleure piste audio est généralement Opus (~130-160 kb/s), pas AAC (128 kb/s). | **Validé** : en mode audio seul, on télécharge la meilleure piste **AAC** → `.m4a` sans réencodage (écart de qualité imperceptible, compatibilité quasi universelle). Option **MP3** (réencodage audio) dans les paramètres. |
 | C4 | **Dossier temporaire nommé d'après le titre**. Un titre peut changer, contenir des caractères interdits ou être dupliqué. | Cache indexé par **identifiant YouTube** (`cache/dQw4w9WgXcQ/`). Le titre ne sert qu'au dossier de sortie. |
 | C5 | **Nettoyage automatique du source vs « ajouter des segments à tout moment »**. On ne peut pas savoir si un segment sera encore ajouté. | Le cache est une **optimisation, jamais une dépendance** : si le source a été supprimé et qu'un segment est ajouté, la vidéo est simplement retéléchargée. Politique de nettoyage en §9. |
 | C6 | **Choix d'un mode par vidéo vs modification du mode après téléchargement**. | Les pistes vidéo et audio sont stockées **séparément** dans le cache ; seules les pistes nécessaires au mode sont téléchargées. Changer de mode ne télécharge que la piste manquante. |
@@ -523,7 +523,8 @@ d'auteur, les licences applicables et les conditions d'utilisation de YouTube.
 
 1. ✅ **Précision** : début aligné sur l'image clé précédente, fin précise.
 2. ✅ **Codecs** : meilleure qualité absolue (AV1/VP9 + Opus possibles dans le MP4).
-3. ⏳ **Audio seul** : question MP3 en cours (MP3 impose un réencodage de l'audio).
+3. ✅ **Audio seul** : `.m4a` (piste AAC d'origine, sans réencodage) par défaut ;
+   option « MP3 » dans les paramètres (réencodage de l'audio uniquement, VBR haute qualité).
 4. ✅ **Parcours** : la vidéo entre dans la file dès que l'URL est collée ; téléchargement
    quand la file est démarrée et qu'au moins un segment existe.
 5. ✅ **Cache** : conservé pendant la session, supprimé par « Terminer la vidéo » ou à la
@@ -531,4 +532,4 @@ d'auteur, les licences applicables et les conditions d'utilisation de YouTube.
 6. ✅ **Pause** : pause de la file + annulation ; pas de pause individuelle en V1.
 7. ✅ **Persistance de la file** entre deux lancements : hors V1.
 8. ✅ **Boutons d'incrément** : −10 / −1 / +1 / +10 s + clavier + saisie rapide.
-9. ⏳ **Dépendance Deno** : à confirmer (nécessaire à partir de l'étape 4).
+9. ✅ **Dépendance Deno** : acceptée.
