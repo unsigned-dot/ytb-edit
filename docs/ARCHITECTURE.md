@@ -1,7 +1,7 @@
 # ytb-edit — Architecture (Étape 1, proposition à valider)
 
-> Statut : **proposition**, aucune ligne de code écrite. Ce document sert de référence
-> pour les étapes suivantes et sera mis à jour au fil des validations.
+> Statut : **validée** (voir §20). Ce document sert de référence pour les étapes
+> suivantes et est mis à jour au fil des décisions.
 
 Outil personnel Windows : télécharger des vidéos YouTube publiques puis en extraire
 des segments **sans réencodage**, via une file de tâches dans une interface graphique.
@@ -28,7 +28,7 @@ des segments **sans réencodage**, via une file de tâches dans une interface gr
 
 | Sujet | Choix | Raison principale |
 |-------|-------|-------------------|
-| Langage | Python **3.12+** (3.12 ou 3.13 recommandé) | Supporté par toutes les dépendances. |
+| Langage | Python **3.12 ou 3.13** recommandé (3.11 minimum) | Supporté par toutes les dépendances. |
 | GUI | **PySide6** (Qt 6, paquet `PySide6-Essentials`) | Rendu Windows natif, signaux thread-safe, widgets riches, licence LGPL (≠ PyQt en GPL), binding officiel Qt, bon support PyInstaller/Nuitka. Tkinter : trop limité (pas de range slider, rendu daté). Solutions web (Flet, pywebview…) : une couche de plus sans bénéfice ici. |
 | Slider début/fin | **`superqt.QRangeSlider`** | Qt n'a pas de slider à deux poignées ; `superqt` est petit, maintenu, compatible PySide6. Évite ~150 lignes de widget custom. |
 | YouTube | **yt-dlp** (API Python, extra `[default]`) | Standard de fait, maintenu très activement, métadonnées structurées, hooks de progression, exceptions typées. |
@@ -91,6 +91,7 @@ ytb-edit/
 │       ├── __init__.py
 │       ├── __main__.py          # python -m ytb_edit
 │       ├── app.py               # assemblage : settings, logs, vérif outils, engine, fenêtre
+│       ├── paths.py             # emplacements : paramètres, logs, cache (platformdirs)
 │       ├── settings.py          # AppSettings + chargement/sauvegarde JSON
 │       ├── logging_setup.py     # configuration logging (fichier + console)
 │       ├── core/
@@ -518,18 +519,16 @@ d'auteur, les licences applicables et les conditions d'utilisation de YouTube.
 
 ---
 
-## 20. Décisions soumises à validation
+## 20. Décisions validées
 
-1. **Précision** : début aligné sur l'image clé précédente (quelques secondes de plus
-   au début possibles), fin précise.
-2. **Codecs** : meilleure qualité absolue (AV1/VP9 + Opus possibles dans le MP4), ou
-   priorité à la compatibilité H.264/AAC ?
-3. **Audio seul** : `.opus` ou `.m4a` selon le codec source (sans réencodage).
-4. **Parcours** : la vidéo entre dans la file dès que l'URL est collée ; téléchargement
+1. ✅ **Précision** : début aligné sur l'image clé précédente, fin précise.
+2. ✅ **Codecs** : meilleure qualité absolue (AV1/VP9 + Opus possibles dans le MP4).
+3. ⏳ **Audio seul** : question MP3 en cours (MP3 impose un réencodage de l'audio).
+4. ✅ **Parcours** : la vidéo entre dans la file dès que l'URL est collée ; téléchargement
    quand la file est démarrée et qu'au moins un segment existe.
-5. **Cache** : conservé pendant la session, supprimé par « Terminer la vidéo » ou à la
+5. ✅ **Cache** : conservé pendant la session, supprimé par « Terminer la vidéo » ou à la
    fermeture, plafond de taille, réutilisation entre sessions.
-6. **Pause** : pause de la file + annulation ; pas de pause individuelle en V1.
-7. **Persistance de la file** entre deux lancements : hors V1.
-8. **Boutons d'incrément** : −10 / −1 / +1 / +10 s (au lieu de −20 / −10 / +10 / +20).
-9. **Dépendance Deno** (en plus de FFmpeg).
+6. ✅ **Pause** : pause de la file + annulation ; pas de pause individuelle en V1.
+7. ✅ **Persistance de la file** entre deux lancements : hors V1.
+8. ✅ **Boutons d'incrément** : −10 / −1 / +1 / +10 s + clavier + saisie rapide.
+9. ⏳ **Dépendance Deno** : à confirmer (nécessaire à partir de l'étape 4).
